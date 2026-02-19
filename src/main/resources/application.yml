@@ -1,8 +1,11 @@
+server:
+  port: ${PORT:8080}
+
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/document_operator
-    username: postgres
-    password: postgres
+    username: ${DB_USER:postgres}
+    password: ${DB_PASS:postgres}
 
   jpa:
     hibernate:
@@ -14,3 +17,16 @@ spring:
 
   liquibase:
     change-log: classpath:/db/changelog/db.changelog-master.xml
+
+document-operator:
+  batchSize: ${DOCUMENT_OPERATOR_BATCH_SIZE:10}
+  worker:
+    submit-interval-ms: ${DOCUMENT_OPERATOR_WORKER_SUBMIT_INTERVAL_MS:5000}
+    approve-interval-ms: ${DOCUMENT_OPERATOR_WORKER_APPROVE_INTERVAL_MS:5000}
+
+
+document-generator:
+  totalDocuments: ${TOTAL_DOCUMENTS:50}
+  authorPrefix: ${AUTHOR_PREFIX:user}
+  titlePrefix: ${TITLE_PREFIX:Document}
+  batchSize: ${DOC_GEN_BATCH_SIZE:10}
