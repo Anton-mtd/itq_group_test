@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.23.xsd">
+
+    <changeSet id="004-add-foreign-keys" author="Anton Skomorokhin">
+
+        <addForeignKeyConstraint
+                baseTableName="document_history"
+                baseColumnNames="document_id"
+                referencedTableName="document"
+                referencedColumnNames="id"
+                constraintName="fk_history_document"/>
+
+        <addForeignKeyConstraint
+                baseTableName="approval_registry"
+                baseColumnNames="document_id"
+                referencedTableName="document"
+                referencedColumnNames="id"
+                constraintName="fk_registry_document"/>
+
+    </changeSet>
+
+</databaseChangeLog>

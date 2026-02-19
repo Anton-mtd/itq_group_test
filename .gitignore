@@ -1,0 +1,12 @@
+/target/classes/db/changelog/v1/001-create-document-table.xml
+/target/classes/db/changelog/v1/002-create-document-history-table.xml
+/target/classes/db/changelog/v1/003-create-approval-registry-table.xml
+/target/classes/db/changelog/v1/004-add-foreign-keys.xml
+/target/classes/application.yml
+/target/classes/ru/skomorokhin/documentoperator/model/entity/ApprovalRegistry.class
+/target/classes/db/changelog/db.changelog-master.xml
+/target/classes/ru/skomorokhin/documentoperator/model/entity/Document.class
+/target/classes/ru/skomorokhin/documentoperator/model/enums/DocumentAction.class
+/target/classes/ru/skomorokhin/documentoperator/model/entity/DocumentHistory.class
+/target/classes/ru/skomorokhin/documentoperator/DocumentOperatorApplication.class
+/target/classes/ru/skomorokhin/documentoperator/model/enums/DocumentStatus.class
