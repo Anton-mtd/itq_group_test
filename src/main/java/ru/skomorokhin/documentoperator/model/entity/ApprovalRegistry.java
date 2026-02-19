@@ -9,10 +9,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
 
 import java.time.LocalDateTime;
 
 @Entity
+@Setter
+@Getter
 @Table(name = "approval_registry")
 public class ApprovalRegistry {
 
@@ -24,6 +29,7 @@ public class ApprovalRegistry {
     @JoinColumn(name = "document_id", nullable = false, unique = true)
     private Document document;
 
+    @CreatedDate
     @Column(name = "approved_by", nullable = false)
     private String approvedBy;
 

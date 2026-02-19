@@ -11,11 +11,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
 import ru.skomorokhin.documentoperator.model.enums.DocumentAction;
 
 import java.time.LocalDateTime;
 
 @Entity
+@Setter
+@Getter
 @Table(name = "document_history")
 public class DocumentHistory {
 
@@ -34,6 +39,7 @@ public class DocumentHistory {
     @Column(name = "performed_by", nullable = false)
     private String performedBy;
 
+    @CreatedDate
     @Column(name = "performed_at", nullable = false)
     private LocalDateTime performedAt;
 
