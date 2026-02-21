@@ -26,6 +26,9 @@ public class ApproveWorker {
 
     @Scheduled(fixedDelayString = "${document-operator.worker.approve-interval-ms}")
     public void run() {
+        long remainingBefore = documentRepository.countByStatus(DocumentStatus.SUBMITTED);
+        if (remainingBefore == 0) return;
+
         var submitted = documentRepository.findByStatus(DocumentStatus.SUBMITTED)
                 .stream()
                 .limit(batchSize)
@@ -33,9 +36,14 @@ public class ApproveWorker {
 
         if (submitted.isEmpty()) return;
 
-        documentService.approveDocuments(
-                submitted.stream().map(Document::getId).toList(),
-                "approve-worker"
-        ).forEach(r -> log.info("[ApproveWorker] " + r.getDocumentId() + " -> " + r.getMessage()));
+        long startBatch = System.currentTimeMillis();
+        var ids = submitted.stream().map(Document::getId).toList();
+        documentService.approveDocuments(ids, "approve-worker")
+                .forEach(r -> log.debug("[ApproveWorker] {} -> {}", r.getDocumentId(), r.getMessage()));
+
+        long batchMs = System.currentTimeMillis() - startBatch;
+        long remainingAfter = documentRepository.countByStatus(DocumentStatus.SUBMITTED);
+        long processed = submitted.size();
+        log.info("Отправка на утверждение: пачка {} док., время: {} мс; осталось SUBMITTED: {}", processed, batchMs, remainingAfter);
     }
 }

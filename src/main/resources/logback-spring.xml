@@ -12,5 +12,5 @@
         <appender-ref ref="CONSOLE"/>
     </root>
 
-    <logger name="com.example.documentoperator" level="DEBUG"/>
+    <logger name="ru.skomorokhin.documentoperator" level="INFO"/>
 </configuration>

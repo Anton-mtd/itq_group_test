@@ -26,6 +26,9 @@ public class SubmitWorker {
 
     @Scheduled(fixedDelayString = "${document-operator.worker.submit-interval-ms}")
     public void run() {
+        long remainingBefore = documentRepository.countByStatus(DocumentStatus.DRAFT);
+        if (remainingBefore == 0) return;
+
         var drafts = documentRepository.findByStatus(DocumentStatus.DRAFT)
                 .stream()
                 .limit(batchSize)
@@ -33,9 +36,14 @@ public class SubmitWorker {
 
         if (drafts.isEmpty()) return;
 
-        documentService.submitDocuments(
-                drafts.stream().map(Document::getId).toList(),
-                "submit-worker"
-        ).forEach(r -> log.info("[SubmitWorker] {} -> {}", r.getDocumentId(), r.getMessage()));
+        long startBatch = System.currentTimeMillis();
+        var ids = drafts.stream().map(Document::getId).toList();
+        documentService.submitDocuments(ids, "submit-worker")
+                .forEach(r -> log.debug("[SubmitWorker] {} -> {}", r.getDocumentId(), r.getMessage()));
+
+        long batchMs = System.currentTimeMillis() - startBatch;
+        long remainingAfter = documentRepository.countByStatus(DocumentStatus.DRAFT);
+        long processed = drafts.size();
+        log.info("Отправка на согласование: пачка {} док., время: {} мс; осталось DRAFT: {}", processed, batchMs, remainingAfter);
     }
 }

@@ -20,6 +20,8 @@ public interface DocumentRepository extends JpaRepository<Document, Long>,
 
     List<Document> findByStatus(DocumentStatus status);
 
+    long countByStatus(DocumentStatus status);
+
     @EntityGraph(value = "Document.withHistory", type = EntityGraph.EntityGraphType.FETCH)
     List<Document> findAllByIdIn(List<Long> ids);
 

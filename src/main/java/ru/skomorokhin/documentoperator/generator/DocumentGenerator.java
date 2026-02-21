@@ -20,12 +20,15 @@ public class DocumentGenerator {
     private final DocumentGeneratorProperties props;
 
     public void run() {
-
         int total = props.getTotalDocuments();
         int batchSize = props.getBatchSize();
 
-        for (int i = 0; i < total; i += batchSize) {
+        log.info("Задано к созданию документов: N = {}, размер пачки: {}", total, batchSize);
 
+        long startTotal = System.currentTimeMillis();
+
+        for (int i = 0; i < total; i += batchSize) {
+            long startBatch = System.currentTimeMillis();
             int end = Math.min(i + batchSize, total);
 
             List<Document> batch = IntStream.range(i, end)
@@ -34,10 +37,12 @@ public class DocumentGenerator {
 
             documentService.saveAll(batch);
 
-            log.info("Saved batch {} - {}", i, end);
+            long batchMs = System.currentTimeMillis() - startBatch;
+            log.info("Создание: прогресс {}/{} (пачка {}–{}), время пачки: {} мс", end, total, i, end, batchMs);
         }
 
-        log.info("Finished creating {} documents", total);
+        long totalMs = System.currentTimeMillis() - startTotal;
+        log.info("Создание завершено: создано {} документов, общее время: {} мс", total, totalMs);
     }
 
     private Document buildDocument(int index) {
