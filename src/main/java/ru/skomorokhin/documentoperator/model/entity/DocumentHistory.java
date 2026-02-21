@@ -2,6 +2,7 @@ package ru.skomorokhin.documentoperator.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -14,6 +15,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import ru.skomorokhin.documentoperator.model.enums.DocumentAction;
 
 import java.time.LocalDateTime;
@@ -21,6 +23,7 @@ import java.time.LocalDateTime;
 @Entity
 @Setter
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "document_history")
 public class DocumentHistory {
 

@@ -1,43 +1,51 @@
 package ru.skomorokhin.documentoperator.generator;
 
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import ru.skomorokhin.documentoperator.config.DocumentGeneratorProperties;
 import ru.skomorokhin.documentoperator.model.entity.Document;
+import ru.skomorokhin.documentoperator.model.enums.DocumentStatus;
 import ru.skomorokhin.documentoperator.service.DocumentService;
 
+import java.util.List;
+import java.util.stream.IntStream;
+
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class DocumentGenerator {
 
     private final DocumentService documentService;
-    private final int totalDocuments;
-    private final String authorPrefix;
-    private final String titlePrefix;
-    private final int batchSize;
-
-    public DocumentGenerator(DocumentService documentService,
-                             @Value("${document-generator.totalDocuments}") int totalDocuments,
-                             @Value("${document-generator.authorPrefix}") String authorPrefix,
-                             @Value("${document-generator.titlePrefix}") String titlePrefix,
-                             @Value("${document-generator.batchSize}") int batchSize) {
-        this.documentService = documentService;
-        this.totalDocuments = totalDocuments;
-        this.authorPrefix = authorPrefix;
-        this.titlePrefix = titlePrefix;
-        this.batchSize = batchSize;
-    }
+    private final DocumentGeneratorProperties props;
 
     public void run() {
-        int created = 0;
-        while (created < totalDocuments) {
-            int end = Math.min(created + batchSize, totalDocuments);
-            for (int i = created; i < end; i++) {
-                String author = authorPrefix + i;
-                String title = titlePrefix + " #" + i;
-                Document doc = documentService.createDocument(author, title);
-                System.out.println("[DocumentGenerator] Created document: " + doc.getDocumentNumber());
-            }
-            created = end;
+
+        int total = props.getTotalDocuments();
+        int batchSize = props.getBatchSize();
+
+        for (int i = 0; i < total; i += batchSize) {
+
+            int end = Math.min(i + batchSize, total);
+
+            List<Document> batch = IntStream.range(i, end)
+                    .mapToObj(this::buildDocument)
+                    .toList();
+
+            documentService.saveAll(batch);
+
+            log.info("Saved batch {} - {}", i, end);
         }
-        System.out.println("[DocumentGenerator] Finished creating " + totalDocuments + " documents.");
+
+        log.info("Finished creating {} documents", total);
+    }
+
+    private Document buildDocument(int index) {
+        Document doc = new Document();
+        doc.setAuthor(props.getAuthorPrefix() + index);
+        doc.setTitle(props.getTitlePrefix() + " #" + index);
+        doc.setStatus(DocumentStatus.DRAFT);
+        doc.setDocumentNumber(documentService.generateDocumentNumber());
+        return doc;
     }
 }

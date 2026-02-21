@@ -9,9 +9,12 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
@@ -26,12 +29,23 @@ import java.util.List;
 @Setter
 @Getter
 @EntityListeners(AuditingEntityListener.class)
+@NamedEntityGraph(
+        name = "Document.withHistory",
+        attributeNodes = {
+                @NamedAttributeNode("history"),
+                @NamedAttributeNode("approvalRegistry")
+        }
+)
 @Table(name = "document")
 public class Document {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     @Column(name = "document_number", nullable = false, unique = true)
     private String documentNumber;

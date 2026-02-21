@@ -1,35 +1,38 @@
 package ru.skomorokhin.documentoperator.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.skomorokhin.documentoperator.dto.DocumentResultDto;
-import ru.skomorokhin.documentoperator.model.entity.ApprovalRegistry;
+import ru.skomorokhin.documentoperator.dto.DocWithHistory;
+import ru.skomorokhin.documentoperator.dto.DocumentDto;
+import ru.skomorokhin.documentoperator.dto.DocumentFilter;
+import ru.skomorokhin.documentoperator.dto.PageResponse;
+import ru.skomorokhin.documentoperator.exception.BusinessException;
+import ru.skomorokhin.documentoperator.exception.ErrorCode;
+import ru.skomorokhin.documentoperator.mapper.DocumentMapper;
 import ru.skomorokhin.documentoperator.model.entity.Document;
-import ru.skomorokhin.documentoperator.model.entity.DocumentHistory;
-import ru.skomorokhin.documentoperator.model.enums.DocumentAction;
 import ru.skomorokhin.documentoperator.model.enums.DocumentStatus;
 import ru.skomorokhin.documentoperator.repository.ApprovalRegistryRepository;
 import ru.skomorokhin.documentoperator.repository.DocumentHistoryRepository;
 import ru.skomorokhin.documentoperator.repository.DocumentRepository;
+import ru.skomorokhin.documentoperator.repository.DocumentSpecification;
 import ru.skomorokhin.documentoperator.service.DocumentService;
+import ru.skomorokhin.documentoperator.service.DocumentWorkflowService;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.stream.Collectors;
+
+import static ru.skomorokhin.documentoperator.exception.ErrorCode.DOCUMENT_NOT_FOUND;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +41,10 @@ public class DocumentServiceImpl implements DocumentService {
     private final DocumentRepository documentRepository;
     private final DocumentHistoryRepository historyRepository;
     private final ApprovalRegistryRepository registryRepository;
+    private final DocumentWorkflowService documentWorkflowService;
+    private final DocumentMapper documentMapper;
+
+    private static final String PREFIX = "DOC-";
 
     @Override
     public Document createDocument(String author, String title) {
@@ -50,154 +57,189 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public Document getDocument(Long id) {
-        return documentRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Document not found"));
+    public DocWithHistory getDocument(Long id) {
+        Document document = documentRepository.findDocumentById(id)
+                .orElseThrow(() -> new BusinessException(DOCUMENT_NOT_FOUND));
+
+        return documentMapper.toDto(document);
     }
 
     @Override
-    public Page<Document> getDocuments(List<Long> ids, Pageable pageable) {
-        List<Document> docs = documentRepository.findAllById(ids);
+    public List<DocWithHistory> getDocuments(List<Long> ids) {
 
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), docs.size());
-        List<Document> content = docs.subList(start, end);
-        return new PageImpl<>(content, pageable, docs.size());
+        return documentRepository.findAllByIdIn(ids).stream()
+                .map(documentMapper::toDto)
+                .toList();
     }
 
     @Override
-    public List<DocumentResultDto> submitDocuments(List<Long> ids, String performedBy) {
-        List<DocumentResultDto> results = new ArrayList<>();
+    public PageResponse<DocWithHistory> getDocumentsByFilter(DocumentFilter filter, Pageable pageable) {
+        Page<Document> documents = documentRepository.findAll(buildSpecification(filter), pageable);
+
+        Page<DocWithHistory> page = documents.map(documentMapper::toDto);
+
+        return PageResponse.<DocWithHistory>builder()
+                .items(page.getContent())
+                .meta(PageResponse.MetaPageInfo.builder()
+                        .page(page.getNumber())
+                        .itemsCount(page.getTotalPages())
+                        .pageSize(page.getSize())
+                        .totalPages(page.getTotalPages())
+                        .build())
+                .build();
+    }
+
+    @Override
+    public List<DocumentDto> submitDocuments(List<Long> ids, String performedBy) {
+
+        List<DocumentDto> results = new ArrayList<>();
+
         for (Long id : ids) {
             try {
-                DocumentResultDto result = submitDocument(id, performedBy);
-                results.add(result);
+                documentWorkflowService.submitDocument(id, performedBy);
+                results.add(new DocumentDto(id, true, "Submitted successfully"));
+            } catch (BusinessException e) {
+                results.add(new DocumentDto(
+                        id,
+                        false,
+                        e.getErrorCode().getMessage()
+                ));
             } catch (Exception e) {
-                results.add(new DocumentResultDto(id, false, e.getMessage()));
+                results.add(new DocumentDto(
+                        id,
+                        false,
+                        ErrorCode.INTERNAL_ERROR.getMessage()
+                ));
             }
         }
+
         return results;
     }
 
-    @Transactional
-    public DocumentResultDto submitDocument(Long id, String performedBy) {
-        Optional<Document> optional = documentRepository.findById(id);
-        if (optional.isEmpty()) {
-            return new DocumentResultDto(id, false, "Not found");
-        }
-        Document doc = optional.get();
-        if (doc.getStatus() != DocumentStatus.DRAFT) {
-            return new DocumentResultDto(id, false, "Conflict: not in DRAFT status");
-        }
-
-        doc.setStatus(DocumentStatus.SUBMITTED);
-        documentRepository.save(doc);
-
-        DocumentHistory history = new DocumentHistory();
-        history.setDocument(doc);
-        history.setAction(DocumentAction.SUBMIT);
-        history.setPerformedBy(performedBy);
-        historyRepository.save(history);
-
-        return new DocumentResultDto(id, true, "Submitted successfully");
-    }
-
     @Override
-    public List<DocumentResultDto> approveDocuments(List<Long> ids, String performedBy) {
-        List<DocumentResultDto> results = new ArrayList<>();
+    public List<DocumentDto> approveDocuments(List<Long> ids, String performedBy) {
+
+        List<DocumentDto> results = new ArrayList<>();
+
         for (Long id : ids) {
             try {
-                DocumentResultDto result = approveDocument(id, performedBy);
-                results.add(result);
+                documentWorkflowService.approveDocument(id, performedBy);
+                results.add(new DocumentDto(id, true, "Approved successfully"));
+            } catch (BusinessException e) {
+                results.add(new DocumentDto(
+                        id,
+                        false,
+                        e.getErrorCode().getMessage()
+                ));
             } catch (Exception e) {
-                results.add(new DocumentResultDto(id, false, e.getMessage()));
+                results.add(new DocumentDto(
+                        id,
+                        false,
+                        ErrorCode.INTERNAL_ERROR.getMessage()
+                ));
             }
         }
+
         return results;
     }
 
-    @Transactional
-    public DocumentResultDto approveDocument(Long id, String performedBy) {
-        Optional<Document> optional = documentRepository.findById(id);
-        if (optional.isEmpty()) {
-            return new DocumentResultDto(id, false, "Not found");
-        }
-        Document doc = optional.get();
-        if (doc.getStatus() != DocumentStatus.SUBMITTED) {
-            return new DocumentResultDto(id, false, "Conflict: not in SUBMITTED status");
-        }
-
-        doc.setStatus(DocumentStatus.APPROVED);
-        documentRepository.save(doc);
-
-        DocumentHistory history = new DocumentHistory();
-        history.setDocument(doc);
-        history.setAction(DocumentAction.APPROVE);
-        history.setPerformedBy(performedBy);
-        historyRepository.save(history);
-
-        ApprovalRegistry registry = new ApprovalRegistry();
-        registry.setDocument(doc);
-        registry.setApprovedBy(performedBy);
-        try {
-            registryRepository.save(registry);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to register approval in registry");
-        }
-
-        return new DocumentResultDto(id, true, "Approved successfully");
-    }
-
     @Override
-    public Page<Document> searchDocuments(DocumentStatus status, String author, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        List<Document> docs = documentRepository.findAll().stream()
-                .filter(d -> status == null || d.getStatus() == status)
-                .filter(d -> author == null || d.getAuthor().equalsIgnoreCase(author))
-                .filter(d -> from == null || !d.getCreatedAt().isBefore(from))
-                .filter(d -> to == null || !d.getCreatedAt().isAfter(to))
-                .collect(Collectors.toList());
+    public Map<String, Object> checkConcurrentApproval(
+            Long documentId,
+            int threads,
+            int attempts
+    ) {
 
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), docs.size());
-        List<Document> content = docs.subList(start, end);
-        return new PageImpl<>(content, pageable, docs.size());
-    }
+        if (threads <= 0 || attempts <= 0) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Threads and attempts must be positive numbers"
+            );
+        }
 
-    @Override
-    public Map<String, Object> checkConcurrentApproval(Long documentId, int threads, int attempts) {
-        Map<String, Object> result = new HashMap<>();
         ExecutorService executor = Executors.newFixedThreadPool(threads);
-        List<Future<DocumentResultDto>> futures = new ArrayList<>();
+        List<Future<Void>> futures = new ArrayList<>();
 
-        for (int i = 0; i < attempts; i++) {
-            futures.add(executor.submit(() -> approveDocument(documentId, "concurrent_user")));
-        }
+        try {
 
-        int success = 0;
-        int conflict = 0;
-        int failed = 0;
-        for (Future<DocumentResultDto> f : futures) {
-            try {
-                DocumentResultDto r = f.get();
-                if (r.isSuccess()) success++;
-                else if (r.getMessage().contains("Conflict")) conflict++;
-                else failed++;
-            } catch (Exception e) {
-                failed++;
+            for (int i = 0; i < attempts; i++) {
+                futures.add(
+                        executor.submit(() -> {
+                            documentWorkflowService.approveDocument(
+                                    documentId,
+                                    "concurrent_user"
+                            );
+                            return null;
+                        })
+                );
             }
+
+            int success = 0;
+            int conflict = 0;
+            int failed = 0;
+
+            for (Future<Void> future : futures) {
+                try {
+                    future.get();
+                    success++;
+                } catch (ExecutionException ex) {
+
+                    Throwable cause = ex.getCause();
+
+                    if (cause instanceof BusinessException be) {
+
+                        if (be.getErrorCode() == ErrorCode.INVALID_STATUS) {
+                            conflict++;
+                        } else {
+                            failed++;
+                        }
+
+                    } else {
+                        failed++;
+                    }
+
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    failed++;
+                }
+            }
+
+            Document doc = documentRepository.findById(documentId)
+                    .orElse(null);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", success);
+            result.put("conflict", conflict);
+            result.put("failed", failed);
+            result.put("finalStatus", doc != null ? doc.getStatus() : null);
+
+            return result;
+
+        } finally {
+            executor.shutdown();
         }
-
-        Document doc = documentRepository.findById(documentId).orElse(null);
-        result.put("success", success);
-        result.put("conflict", conflict);
-        result.put("failed", failed);
-        result.put("finalStatus", doc != null ? doc.getStatus() : null);
-
-        executor.shutdown();
-        return result;
     }
 
-    private String generateDocumentNumber() {
-        return "DOC-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    @Override
+    @Transactional
+    public void saveAll(List<Document> docs) {
+        documentRepository.saveAll(docs);
+    }
+
+    @Override
+    public String generateDocumentNumber() {
+        return PREFIX + UUID.randomUUID()
+                .toString()
+                .substring(0, 8)
+                .toUpperCase();
+    }
+
+    private Specification<Document> buildSpecification(DocumentFilter filter) {
+        return Specification.where(DocumentSpecification.idsIn(filter.getIds()))
+                .and(DocumentSpecification.documentNumberContains(filter.getDocumentNumber()))
+                .and(DocumentSpecification.authorContains(filter.getAuthor()))
+                .and(DocumentSpecification.statusIn(filter.getStatus()))
+                .and(DocumentSpecification.createdFrom(filter.getCreatedFrom()))
+                .and(DocumentSpecification.createdTo(filter.getCreatedTo()));
     }
 }

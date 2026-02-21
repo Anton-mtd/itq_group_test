@@ -1,12 +1,13 @@
 package ru.skomorokhin.documentoperator.service;
 
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import ru.skomorokhin.documentoperator.dto.DocumentResultDto;
+import org.springframework.transaction.annotation.Transactional;
+import ru.skomorokhin.documentoperator.dto.DocWithHistory;
+import ru.skomorokhin.documentoperator.dto.DocumentDto;
+import ru.skomorokhin.documentoperator.dto.DocumentFilter;
+import ru.skomorokhin.documentoperator.dto.PageResponse;
 import ru.skomorokhin.documentoperator.model.entity.Document;
-import ru.skomorokhin.documentoperator.model.enums.DocumentStatus;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -14,19 +15,21 @@ public interface DocumentService {
 
     Document createDocument(String author, String title);
 
-    Document getDocument(Long id);
+    DocWithHistory getDocument(Long id);
 
-    Page<Document> getDocuments(List<Long> ids, Pageable pageable);
+    List<DocWithHistory> getDocuments(List<Long> ids);
 
-    List<DocumentResultDto> submitDocuments(List<Long> ids, String performedBy);
+    PageResponse<DocWithHistory> getDocumentsByFilter(DocumentFilter filter, Pageable pageable);
 
-    List<DocumentResultDto> approveDocuments(List<Long> ids, String performedBy);
+    List<DocumentDto> submitDocuments(List<Long> ids, String performedBy);
 
-    Page<Document> searchDocuments(DocumentStatus status,
-                                   String author,
-                                   LocalDateTime from,
-                                   LocalDateTime to,
-                                   Pageable pageable);
+    List<DocumentDto> approveDocuments(List<Long> ids, String performedBy);
 
     Map<String, Object> checkConcurrentApproval(Long documentId, int threads, int attempts);
+
+    String generateDocumentNumber();
+
+    @Transactional
+    void saveAll(List<Document> docs);
+
 }

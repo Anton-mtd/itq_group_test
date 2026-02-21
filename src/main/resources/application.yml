@@ -7,13 +7,19 @@ spring:
     username: ${DB_USER:postgres}
     password: ${DB_PASS:postgres}
 
+
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          batch_size: 50
+          order_inserts: true
+          order_updates: true
+
 
   liquibase:
     change-log: classpath:/db/changelog/db.changelog-master.xml
@@ -21,12 +27,19 @@ spring:
 document-operator:
   batchSize: ${DOCUMENT_OPERATOR_BATCH_SIZE:10}
   worker:
-    submit-interval-ms: ${DOCUMENT_OPERATOR_WORKER_SUBMIT_INTERVAL_MS:5000}
-    approve-interval-ms: ${DOCUMENT_OPERATOR_WORKER_APPROVE_INTERVAL_MS:5000}
+    enable-submit: ${ENABLE_SUBMIT:true}
+    enable-approve: ${ENABLE_APPROVE:true}
+    submit-interval-ms: ${DOCUMENT_OPERATOR_WORKER_SUBMIT_INTERVAL_MS:500000}
+    approve-interval-ms: ${DOCUMENT_OPERATOR_WORKER_APPROVE_INTERVAL_MS:500000}
 
 
 document-generator:
-  totalDocuments: ${TOTAL_DOCUMENTS:50}
+  totalDocuments: ${TOTAL_DOCUMENTS:20}
   authorPrefix: ${AUTHOR_PREFIX:user}
   titlePrefix: ${TITLE_PREFIX:Document}
   batchSize: ${DOC_GEN_BATCH_SIZE:10}
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

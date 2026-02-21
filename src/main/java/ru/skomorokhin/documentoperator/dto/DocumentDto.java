@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class DocumentResultDto {
+public class DocumentDto {
     private Long documentId;
     private boolean success;
     private String message;
